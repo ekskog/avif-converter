@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const HeicProcessor = require('./heic-processor');
+const HeicProcessor = require('./server');
 
 // CLI Usage function
 function showUsage() {
