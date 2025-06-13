@@ -17,20 +17,16 @@ class HeicProcessor {
    * @returns {Object} Processed variants
    */
   async processHeicFile(heicBuffer, fileName) {
-    const timerLabel = `HEIC-${fileName}`;
-    console.time(timerLabel);
-    console.log(`[HEIC_PROCESSOR] Starting HEIC processing for file: ${fileName} (${(heicBuffer.length / 1024 / 1024).toFixed(2)}MB)`)
+    console.log(`Processing HEIC file...`);
     
     // Check file size limit to prevent memory issues
     const maxSizeMB = 100; // 100MB limit
     const fileSizeMB = heicBuffer.length / 1024 / 1024;
     if (fileSizeMB > maxSizeMB) {
-      console.error(`[HEIC_PROCESSOR] File too large: ${fileName} (${fileSizeMB.toFixed(2)}MB > ${maxSizeMB}MB)`)
       throw new Error(`File too large: ${fileSizeMB.toFixed(2)}MB. Maximum allowed: ${maxSizeMB}MB`);
     }
     
     if (!this.heicSupported) {
-      console.error(`[HEIC_PROCESSOR] HEIC processing not supported for: ${fileName}`)
       throw new Error('HEIC processing not supported - please install libheif');
     }
 
@@ -39,9 +35,7 @@ class HeicProcessor {
 
     try {
       // First convert HEIC to JPEG using heic-convert with timeout
-      const heicConvertTimer = `HEIC-to-JPEG-${fileName}`;
-      console.time(heicConvertTimer);
-      console.log(`[HEIC_PROCESSOR] Converting HEIC to JPEG intermediate format: ${fileName}`)
+      console.log('Converting HEIC to JPEG...');
       const jpegBuffer = await Promise.race([
         heicConvert({
           buffer: heicBuffer,
@@ -50,14 +44,11 @@ class HeicProcessor {
         }),
         new Promise((_, reject) => setTimeout(() => reject(new Error('HEIC conversion timeout')), 120000)) // 2 minutes timeout
       ]);
-      console.timeEnd(heicConvertTimer);
-      console.log(`[HEIC_PROCESSOR] HEIC to JPEG conversion completed: ${(jpegBuffer.length / 1024 / 1024).toFixed(2)}MB`)
+      console.log('HEIC conversion complete');
 
       // Then use Sharp to create variants from the JPEG
-      console.log(`[HEIC_PROCESSOR] Extracting metadata from converted JPEG`)
       const image = sharp(jpegBuffer);
       const metadata = await image.metadata();
-      console.log(`[HEIC_PROCESSOR] Metadata extracted - Dimensions: ${metadata.width}x${metadata.height}, Format: ${metadata.format}`)
 
       // Generate full-size AVIF and thumbnail variants
       const variants = [
@@ -79,9 +70,7 @@ class HeicProcessor {
 
       // Process each variant with timeout protection
       for (const variant of variants) {
-        const variantTimer = `${variant.name}-variant-${fileName}`;
-        console.time(variantTimer);
-        console.log(`[HEIC_PROCESSOR] Creating ${variant.name} variant`)
+        console.log(`Creating ${variant.name} variant...`);
         let processedBuffer;
         
         try {
@@ -104,21 +93,20 @@ class HeicProcessor {
                   fit: 'cover', 
                   position: 'center' 
                 })
+                .withMetadata() // Preserve EXIF metadata for thumbnails too
                 .heif({ quality: variant.quality, compression: 'av1' })
                 .toBuffer(),
               new Promise((_, reject) => setTimeout(() => reject(new Error('Sharp processing timeout')), 60000)) // 1 minute timeout for thumbnails
             ]);
           }
-          console.timeEnd(variantTimer);
         } catch (variantError) {
-          console.timeEnd(variantTimer);
-          console.error(`[HEIC_PROCESSOR] Failed to create ${variant.name} variant for ${fileName}:`, variantError.message)
+          console.error(`Failed to create ${variant.name} variant:`, variantError.message);
           continue; // Skip this variant but continue with others
         }
 
         const filename = `${baseName}_${variant.name}.${variant.format === 'avif' ? 'avif' : variant.format}`;
         const mimetype = `image/${variant.format === 'avif' ? 'avif' : variant.format}`;
-        console.log(`[HEIC_PROCESSOR] Generated ${variant.name}: ${filename} (${(processedBuffer.length / 1024).toFixed(2)}KB)`)
+        console.log(`✓ Generated ${variant.name}: ${filename} (${(processedBuffer.length / 1024).toFixed(2)}KB)`);
 
         results[variant.name] = {
           buffer: processedBuffer,
@@ -135,20 +123,17 @@ class HeicProcessor {
         };
       }
       
-      console.timeEnd(timerLabel);
-      console.log(`[HEIC_PROCESSOR] HEIC processing completed: ${Object.keys(results).length} variants created`)
+      console.log(`HEIC processing completed: ${Object.keys(results).length} variants created`);
       
       // Force garbage collection if available
       if (global.gc) {
         global.gc();
-        console.log(`[HEIC_PROCESSOR] Garbage collection triggered after processing ${fileName}`)
       }
       
       return results;
 
     } catch (error) {
-      console.timeEnd(timerLabel);
-      console.error(`[HEIC_PROCESSOR] HEIC processing failed:`, error.message)
+      console.error(`HEIC processing failed:`, error.message);
       
       // Force garbage collection on error
       if (global.gc) {

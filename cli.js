@@ -47,6 +47,9 @@ async function processImage(inputPath, outputDir) {
     console.log(`Output: ${outputDir}`);
     console.log(`Processing...`);
 
+    // Start timing
+    const startTime = Date.now();
+
     // Initialize processor
     const processor = new HeicProcessor();
     
@@ -54,26 +57,38 @@ async function processImage(inputPath, outputDir) {
     const isHeic = HeicProcessor.isHeicFile(fileName);
     let results;
 
+    let variantTimings = {};
+
     if (isHeic) {
       // Process HEIC file (creates full + thumbnail variants)
       results = await processor.processHeicFile(inputBuffer, fileName);
+      // Note: HEIC processing happens internally, so we can't time individual variants
+      variantTimings.heic_processing = 'Internal processing';
     } else {
       // For non-HEIC files, use convertToAvif to create similar variants
       const baseName = path.parse(fileName).name;
       
       // Create full-size variant
+      console.log('Converting full-size variant...');
+      const fullStartTime = Date.now();
       const fullBuffer = await processor.convertToAvif(inputBuffer, { 
         quality: 90,
         maxWidth: null,
         maxHeight: null 
       });
+      const fullEndTime = Date.now();
+      variantTimings.full = ((fullEndTime - fullStartTime) / 1000).toFixed(2);
       
       // Create thumbnail variant
+      console.log('Converting thumbnail variant...');
+      const thumbnailStartTime = Date.now();
       const thumbnailBuffer = await processor.convertToAvif(inputBuffer, {
         quality: 80,
         maxWidth: 300,
         maxHeight: 300
       });
+      const thumbnailEndTime = Date.now();
+      variantTimings.thumbnail = ((thumbnailEndTime - thumbnailStartTime) / 1000).toFixed(2);
 
       results = {
         full: {
@@ -104,7 +119,26 @@ async function processImage(inputPath, outputDir) {
       console.log(`✓ Saved ${variantName}: ${outputPath} (${(variant.size / 1024).toFixed(2)}KB)`);
     }
 
+    // Calculate processing time
+    const endTime = Date.now();
+    const processingTimeMs = endTime - startTime;
+    const processingTimeSec = (processingTimeMs / 1000).toFixed(2);
+
     console.log(`\n=== Conversion Complete ===`);
+    console.log(`Total processing time: ${processingTimeSec}s`);
+    
+    // Display individual variant timings
+    if (Object.keys(variantTimings).length > 0) {
+      console.log(`Variant conversion times:`);
+      for (const [variant, time] of Object.entries(variantTimings)) {
+        if (time === 'Internal processing') {
+          console.log(`  - ${variant}: ${time}`);
+        } else {
+          console.log(`  - ${variant}: ${time}s`);
+        }
+      }
+    }
+    
     console.log(`Generated ${savedFiles.length} variants:`);
     savedFiles.forEach(file => {
       console.log(`  - ${file.variant}: ${file.file} (${file.size})`);
