@@ -239,4 +239,89 @@ brew install libheif  # macOS
   }
 }
 
-module.exports = HeicProcessor;
+/**
+ * Process image file: HEIC -> AVIF variants (full + thumbnail)
+ * @param {string} inputPath - Path to input image file (HEIC or other)
+ * @param {string} outputDir - Directory to save output AVIF files
+ * @returns {Object} Result object with success status and file info
+ */
+async function processImage(inputPath, outputDir) {
+  try {
+    // Validate input file exists
+    if (!fs.existsSync(inputPath)) {
+      throw new Error(`Input file does not exist: ${inputPath}`);
+    }
+
+    // Create output directory if it doesn't exist
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    // Read input file
+    const inputBuffer = fs.readFileSync(inputPath);
+    const fileName = path.basename(inputPath);
+
+    // Initialize processor
+    const processor = new HeicProcessor();
+    
+    // Determine if it's a HEIC file
+    const isHeic = HeicProcessor.isHeicFile(fileName);
+    let results;
+
+    if (isHeic) {
+      // Process HEIC file (creates full + thumbnail variants)
+      results = await processor.processHeicFile(inputBuffer, fileName);
+    } else {
+      // For non-HEIC files, use convertToAvif to create similar variants
+      const baseName = path.parse(fileName).name;
+      
+      // Create full-size variant
+      const fullBuffer = await processor.convertToAvif(inputBuffer, { 
+        quality: 90,
+        maxWidth: null,
+        maxHeight: null 
+      });
+      
+      // Create thumbnail variant
+      const thumbnailBuffer = await processor.convertToAvif(inputBuffer, {
+        quality: 80,
+        maxWidth: 300,
+        maxHeight: 300
+      });
+
+      results = {
+        full: {
+          buffer: fullBuffer,
+          filename: `${baseName}_full.avif`,
+          size: fullBuffer.length,
+          mimetype: 'image/avif'
+        },
+        thumbnail: {
+          buffer: thumbnailBuffer,
+          filename: `${baseName}_thumbnail.avif`,
+          size: thumbnailBuffer.length,
+          mimetype: 'image/avif'
+        }
+      };
+    }
+
+    // Save all variants to output directory
+    const savedFiles = [];
+    for (const [variantName, variant] of Object.entries(results)) {
+      const outputPath = path.join(outputDir, variant.filename);
+      fs.writeFileSync(outputPath, variant.buffer);
+      savedFiles.push({
+        variant: variantName,
+        file: outputPath,
+        size: `${(variant.size / 1024).toFixed(2)}KB`
+      });
+    }
+
+    return { success: true, files: savedFiles };
+
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+module.exports = { HeicProcessor, processImage };

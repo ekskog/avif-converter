@@ -35,3 +35,15 @@ logs/
 # Temporary files
 tmp/
 temp/
+
+# Test and temporary files
+input/
+temp-output/
+temp-test/
+uploads/
+*.avif
+*.jpeg
+*.jpg
+*.png
+*.heic
+*.heif
