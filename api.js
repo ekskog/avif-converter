@@ -46,6 +46,8 @@ app.post('/convert', upload.single('image'), async (req, res) => {
     const outputDir = 'temp-output';
     
     console.log(`Processing file: ${originalName} (${req.file.size} bytes)`);
+    console.log('Request body fields:', Object.keys(req.body));
+    console.log('returnContents parameter:', req.body.returnContents);
     
     // Ensure output directory exists
     if (!fs.existsSync(outputDir)) {
@@ -62,11 +64,44 @@ app.post('/convert', upload.single('image'), async (req, res) => {
     const result = await processImage(tempPath, outputDir);
 
     if (result.success) {
-      res.json({
-        success: true,
-        message: 'Image converted successfully',
-        files: result.files
-      });
+      // Check if client wants file contents instead of just paths
+      const returnContents = req.body.returnContents === 'true' || req.query.returnContents === 'true';
+      
+      if (returnContents) {
+        // Read the actual file contents and return them
+        const filesWithContents = [];
+        for (const fileInfo of result.files) {
+          try {
+            const fileBuffer = fs.readFileSync(fileInfo.file);
+            filesWithContents.push({
+              variant: fileInfo.variant,
+              filename: path.basename(fileInfo.file),
+              size: fileBuffer.length,
+              sizeFormatted: fileInfo.size,
+              mimetype: 'image/avif',
+              content: fileBuffer.toString('base64') // Base64 encode for JSON transport
+            });
+            
+            // Clean up the temp file
+            fs.unlinkSync(fileInfo.file);
+          } catch (readError) {
+            console.error(`Failed to read converted file: ${fileInfo.file}`, readError.message);
+          }
+        }
+        
+        res.json({
+          success: true,
+          message: 'Image converted successfully',
+          files: filesWithContents
+        });
+      } else {
+        // Return file paths as before
+        res.json({
+          success: true,
+          message: 'Image converted successfully',
+          files: result.files
+        });
+      }
     } else {
       res.status(500).json({
         success: false,
