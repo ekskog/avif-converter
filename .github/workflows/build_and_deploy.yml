@@ -1,4 +1,5 @@
 name: Build and Deploy AVIF Converter
+# Trigger deployment after setting up repository secrets
 
 on:
   push:
