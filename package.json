@@ -2,9 +2,10 @@
   "name": "photovault-image-converter",
   "version": "1.0.0",
   "description": "Standalone image conversion service for PhotoVault - converts HEIC/PNG/JPEG to AVIF",
-  "main": "server.js",
+  "main": "api.js",
   "scripts": {
-    "start": "node cli.js",
+    "start": "node api.js",
+    "dev": "node api.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
