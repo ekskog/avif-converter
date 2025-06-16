@@ -1,0 +1,77 @@
+name: Build and Deploy AVIF Converter
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '*.js'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile'
+      - '.github/workflows/**'
+      - 'k8s/**'
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    env:
+      IMAGE_NAME: ghcr.io/ekskog/avif-converter
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set Environment Variables
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
+          IMAGE_TAG=${{ env.IMAGE_NAME }}:$SHORT_SHA
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.EK_GITHUB_PAT }}
+
+      - name: Build and Push Docker Image
+        run: |
+          echo "Building and pushing image: $IMAGE_TAG"
+          docker buildx build --platform linux/amd64 -t $IMAGE_TAG --push .
+          echo "Image pushed successfully, waiting for registry sync..."
+          sleep 10
+
+      - name: Set Up KUBECONFIG
+        run: |
+          echo "${{ secrets.KUBECONFIG }}" > kubeconfig.yaml
+          export KUBECONFIG=$PWD/kubeconfig.yaml
+          echo "KUBECONFIG set to $KUBECONFIG"
+
+      - name: Verify image exists before deployment
+        run: |
+          echo "Verifying image exists: $IMAGE_TAG"
+          docker manifest inspect $IMAGE_TAG
+                    
+      - name: Deploy to Kubernetes
+        run: |
+          echo "Deploying image: $IMAGE_TAG"
+          
+          # Update the deployment manifest with the correct image tag and apply it
+          sed "s|ghcr.io/ekskog/avif-converter:latest|$IMAGE_TAG|g" k8s/deployment.yaml | kubectl apply -f - --kubeconfig=$PWD/kubeconfig.yaml
+          
+          # Apply other manifests
+          kubectl apply -f k8s/service.yaml --kubeconfig=$PWD/kubeconfig.yaml
+          
+          # Wait for rollout
+          kubectl rollout status deployment/avif-converter --namespace=webapps --kubeconfig=$PWD/kubeconfig.yaml --timeout=600s
+
+      - name: Debug on Failure
+        if: failure()
+        run: |
+          echo "Deployment failed. Gathering debug information..."
+          kubectl describe deployment avif-converter --namespace=webapps --kubeconfig=$PWD/kubeconfig.yaml
+          kubectl describe pods -l app=avif-converter --namespace=webapps --kubeconfig=$PWD/kubeconfig.yaml
+          kubectl logs -l app=avif-converter --namespace=webapps --kubeconfig=$PWD/kubeconfig.yaml --tail=50
