@@ -13,8 +13,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Define Environment Variables
-        run: echo "TIMESTAMP=$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
+      - name: Set Environment Variables
+        run: |
+          SHORT_SHA=$(echo "${{ github.sha }}" | cut -c1-7)
+          echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
 
       - name: Login to GitHub Container Registry
         run: docker login ghcr.io -u $GITHUB_ACTOR --password-stdin <<< "${{ secrets.EK_GITHUB_PAT }}"
@@ -22,7 +24,7 @@ jobs:
       - name: Build and Push Docker Image
         run: |
           IMAGE_NAME=ghcr.io/ekskog/avif-converter
-          IMAGE_TAG=$IMAGE_NAME:${{ env.TIMESTAMP }}
+          IMAGE_TAG=$IMAGE_NAME:${{ env.SHORT_SHA }}
           echo "Resolved IMAGE_TAG: $IMAGE_TAG"
           docker buildx build --platform linux/amd64 -t $IMAGE_TAG --push .
       
@@ -35,7 +37,7 @@ jobs:
       - name: Deploy to Kubernetes
         run: |
           IMAGE_NAME=ghcr.io/ekskog/avif-converter
-          IMAGE_TAG=$IMAGE_NAME:${{ env.TIMESTAMP }}
+          IMAGE_TAG=$IMAGE_NAME:${{ env.SHORT_SHA }}
           echo "Resolved IMAGE_TAG: $IMAGE_TAG"
           kubectl set image deployment/avif-converter avif-converter=$IMAGE_TAG --namespace=webapps --kubeconfig=$PWD/kubeconfig.yaml
           kubectl rollout restart deployment/avif-converter --namespace=webapps --kubeconfig=$PWD/kubeconfig.yaml
