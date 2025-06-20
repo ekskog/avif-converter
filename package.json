@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node api.js",
+    "dev": "nodemon api.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -20,6 +21,9 @@
     "heic-convert": "^2.1.0",
     "multer": "^2.0.1",
     "sharp": "^0.33.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
