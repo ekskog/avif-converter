@@ -207,6 +207,7 @@ class HeicProcessor {
     }
 
     return await sharpImage
+      .rotate() // Auto-rotate based on EXIF orientation data
       .withMetadata() // Preserve EXIF metadata
       .heif({ quality, compression: 'av1' })
       .toBuffer();
