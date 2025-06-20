@@ -19,13 +19,35 @@ jobs:
           echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
           echo "IMAGE_NAME=ghcr.io/ekskog/avif-converter" >> $GITHUB_ENV
 
+      - name: Check if app source code changed
+        id: check_changes
+        run: |
+          # Check if any files outside .github/ and k8s/ changed
+          if git diff --name-only HEAD~1 HEAD | grep -vE '^(\.github/|k8s/)' | grep -q .; then
+            echo "APP_CHANGED=true" >> $GITHUB_ENV
+            echo "✅ App source code changed - will build new image"
+          else
+            echo "APP_CHANGED=false" >> $GITHUB_ENV
+            echo "⚡ Only CI/CD or K8s config changed - will reuse latest available image"
+            
+            # Find the most recent tag from GHCR (this is simpler than parsing git history)
+            echo "Fetching available image tags from registry..."
+            # For now, we'll build anyway if we can't determine the latest tag easily
+            # In production, you could query the GHCR API to get the latest tag
+            echo "APP_CHANGED=true" >> $GITHUB_ENV
+            echo "⚠️  Fallback: Building new image (TODO: implement tag detection)"
+          fi
+
       - name: Set up Docker Buildx
+        if: env.APP_CHANGED == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
+        if: env.APP_CHANGED == 'true'
         run: docker login ghcr.io -u $GITHUB_ACTOR --password-stdin <<< "${{ secrets.EK_GITHUB_PAT }}"
 
       - name: Build and Push Docker Image
+        if: env.APP_CHANGED == 'true'
         run: |
           IMAGE_TAG=${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
           echo "Building and pushing: $IMAGE_TAG"
@@ -37,6 +59,7 @@ jobs:
             .
       
       - name: Verify Image Push
+        if: env.APP_CHANGED == 'true'
         run: |
           IMAGE_TAG=${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
           echo "Verifying image exists: $IMAGE_TAG"
@@ -56,6 +79,10 @@ jobs:
       - name: Deploy to Kubernetes
         run: |
           IMAGE_TAG=${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
-          echo "Deploying IMAGE_TAG: $IMAGE_TAG"
+          if [ "${{ env.APP_CHANGED }}" == "true" ]; then
+            echo "🚀 Deploying NEW image: $IMAGE_TAG"
+          else
+            echo "♻️  Redeploying with rebuild (app-only changes): $IMAGE_TAG"
+          fi
           kubectl set image deployment/avif-converter avif-converter=$IMAGE_TAG --namespace=webapps --kubeconfig=kubeconfig.yaml
           kubectl rollout restart deployment/avif-converter --namespace=webapps --kubeconfig=kubeconfig.yaml
