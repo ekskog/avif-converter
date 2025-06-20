@@ -82,7 +82,12 @@ jobs:
           if [ "${{ env.APP_CHANGED }}" == "true" ]; then
             echo "🚀 Deploying NEW image: $IMAGE_TAG"
           else
-            echo "♻️  Redeploying with rebuild (app-only changes): $IMAGE_TAG"
+            echo "♻️  Redeploying with existing image: $IMAGE_TAG"
           fi
-          kubectl set image deployment/avif-converter avif-converter=$IMAGE_TAG --namespace=webapps --kubeconfig=kubeconfig.yaml
-          kubectl rollout restart deployment/avif-converter --namespace=webapps --kubeconfig=kubeconfig.yaml
+          
+          # Update the deployment YAML with the current image tag
+          sed -i "s|image: ghcr.io/ekskog/avif-converter:.*|image: $IMAGE_TAG|g" k8s/deployment.yaml
+          
+          # Apply the updated deployment YAML to ensure all changes (including ports) are applied
+          kubectl apply -f k8s/deployment.yaml --kubeconfig=kubeconfig.yaml
+          kubectl apply -f k8s/service.yaml --kubeconfig=kubeconfig.yaml
