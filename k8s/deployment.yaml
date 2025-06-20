@@ -7,6 +7,7 @@ metadata:
     app: avif-converter
 spec:
   replicas: 1
+  revisionHistoryLimit: 0  # Keep zero old ReplicaSets - no rollbacks needed
   selector:
     matchLabels:
       app: avif-converter
@@ -15,8 +16,6 @@ spec:
       labels:
         app: avif-converter
     spec:
-      imagePullSecrets:
-      - name: ghcr-secret
       containers:
       - name: avif-converter
         image: ghcr.io/ekskog/avif-converter:latest
