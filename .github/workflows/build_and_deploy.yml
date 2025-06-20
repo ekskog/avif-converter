@@ -44,9 +44,14 @@ jobs:
       
       - name: Set Up KUBECONFIG
         run: |
-          echo "${{ secrets.KUBECONFIG_FILE_CONTENT }}" > kubeconfig.yaml
+          echo "${{ secrets.KUBECONFIG }}" > kubeconfig.yaml
           echo "KUBECONFIG=$PWD/kubeconfig.yaml" >> $GITHUB_ENV
           echo "KUBECONFIG set to $PWD/kubeconfig.yaml"
+          echo "Kubeconfig file size: $(wc -c < kubeconfig.yaml) bytes"
+          if [ ! -s kubeconfig.yaml ]; then
+            echo "ERROR: kubeconfig.yaml is empty!"
+            exit 1
+          fi
                     
       - name: Deploy to Kubernetes
         run: |
