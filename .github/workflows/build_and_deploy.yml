@@ -45,12 +45,12 @@ jobs:
       - name: Set Up KUBECONFIG
         run: |
           echo "${{ secrets.KUBECONFIG_FILE_CONTENT }}" > kubeconfig.yaml
-          export KUBECONFIG=$PWD/kubeconfig.yaml
-          echo "KUBECONFIG set to $KUBECONFIG"
+          echo "KUBECONFIG=$PWD/kubeconfig.yaml" >> $GITHUB_ENV
+          echo "KUBECONFIG set to $PWD/kubeconfig.yaml"
                     
       - name: Deploy to Kubernetes
         run: |
           IMAGE_TAG=${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
-          echo "Resolved IMAGE_TAG: $IMAGE_TAG"
-          kubectl set image deployment/avif-converter avif-converter=$IMAGE_TAG --namespace=webapps --kubeconfig=$PWD/kubeconfig.yaml
-          kubectl rollout restart deployment/avif-converter --namespace=webapps --kubeconfig=$PWD/kubeconfig.yaml
+          echo "Deploying IMAGE_TAG: $IMAGE_TAG"
+          kubectl set image deployment/avif-converter avif-converter=$IMAGE_TAG --namespace=webapps --kubeconfig=kubeconfig.yaml
+          kubectl rollout restart deployment/avif-converter --namespace=webapps --kubeconfig=kubeconfig.yaml
