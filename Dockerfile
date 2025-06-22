@@ -23,6 +23,10 @@ RUN apk add --no-cache \
     libheif \
     && rm -rf /var/cache/apk/*
 
+# Set environment variables to suppress AVIF warnings
+ENV AOM_DISABLE_CPU_CHECKS=1
+ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
+
 # Create app user for security
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001

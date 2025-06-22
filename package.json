@@ -20,7 +20,7 @@
     "express": "^5.1.0",
     "heic-convert": "^2.1.0",
     "multer": "^2.0.1",
-    "sharp": "^0.33.0"
+    "sharp": "^0.33.5"
   },
   "devDependencies": {
     "nodemon": "^3.0.0"
