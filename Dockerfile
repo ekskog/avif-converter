@@ -35,27 +35,27 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Runtime dependencies for custom libvips
+# Runtime dependencies for custom libvips (including curl for test image)
 RUN apk add --no-cache \
   libc6-compat libjpeg-turbo libpng libexif expat zlib curl
 
-# Copy compiled libraries from builder
+# Copy built libraries
 COPY --from=builder /usr /usr
 
-# Copy application and install deps
+# Add test HEIC image for debugging/validation
+RUN mkdir -p /test-images && \
+  curl -fL -o /test-images/sample.heic https://github.com/alexcorvi/heic2any/raw/master/demo/flower.heic
+
+# Copy app files
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY *.js ./
 
-# Pull a test HEIC image into /test-images for validation
-RUN mkdir -p /test-images && \
-  curl -fL -o /test-images/sample.heic https://github.com/alexcorvi/heic2any/raw/master/demo/flower.heic
-
-# Disable sharp cache
+# Environment variables for Sharp
 ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
 ENV NODE_ENV=production
 
-# Create secure non-root user
+# Create unprivileged user
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 USER nodejs
 
