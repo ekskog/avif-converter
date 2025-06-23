@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const { processImage } = require('./server');
+const { processImage } = require('./server.js');
 const path = require('path');
 const fs = require('fs');
 

@@ -1,319 +1,88 @@
-// HEIC Processing Module for PhotoVault API
 const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
-const heicConvert = require('heic-convert');
+
+sharp.cache(false); // disable Sharp internal cache
 
 class HeicProcessor {
-  constructor() {
-    // Use heic-convert library which has better HEIC codec support
-    this.heicSupported = true; // heic-convert always works
-  }
-
   /**
-   * Process HEIC file and generate multiple formats/sizes
-   * @param {Buffer} heicBuffer - Original HEIC file buffer
-   * @param {string} fileName - Original filename
-   * @returns {Object} Processed variants
+   * Convert a HEIC/HEIF buffer to AVIF variants
+   * @param {Buffer} buffer
+   * @param {string} originalName
+   * @returns {Promise<Object>} full and thumbnail variants
    */
-  async processHeicFile(heicBuffer, fileName) {
-    console.log(`[${new Date().toISOString()}] Processing HEIC file...`);
-    
-    // Check file size limit to prevent memory issues
-    const maxSizeMB = 100; // 100MB limit
-    const fileSizeMB = heicBuffer.length / 1024 / 1024;
-    if (fileSizeMB > maxSizeMB) {
-      throw new Error(`File too large: ${fileSizeMB.toFixed(2)}MB. Maximum allowed: ${maxSizeMB}MB`);
-    }
-    
-    if (!this.heicSupported) {
-      throw new Error('HEIC processing not supported - please install libheif');
-    }
-
-    const baseName = path.parse(fileName).name;
+  async convert(buffer, originalName) {
+    const base = path.parse(originalName).name;
+    const metadata = await sharp(buffer).metadata();
     const results = {};
 
-    try {
-      // First convert HEIC to JPEG using heic-convert
-      console.log(`[${new Date().toISOString()}] Converting HEIC to JPEG...`);
-      const jpegBuffer = await heicConvert({
-        buffer: heicBuffer,
-        format: 'JPEG',
-        quality: 1 // Use maximum quality for initial conversion
-      });
-      console.log(`[${new Date().toISOString()}] HEIC conversion complete`);
+    const variants = [
+      { name: 'full', width: null, height: null, quality: 90 },
+      { name: 'thumbnail', width: 300, height: 300, quality: 80 }
+    ];
 
-      // Then use Sharp to create variants from the JPEG
-      const image = sharp(jpegBuffer);
-      const metadata = await image.metadata();
+    for (const v of variants) {
+      let transformer = sharp(buffer)
+        .rotate()
+        .withMetadata()
+        .heif({ compression: 'av1', quality: v.quality });
 
-      // Generate full-size AVIF and thumbnail variants
-      const variants = [
-        {
-          name: 'full',
-          width: null, // Keep original dimensions
-          height: null,
-          quality: 90,
-          format: 'avif'
-        },
-        {
-          name: 'thumbnail',
-          width: 300,
-          height: 300,
-          quality: 80,
-          format: 'avif'
-        }
-      ];
-
-      // Process each variant
-      for (const variant of variants) {
-        console.log(`[${new Date().toISOString()}] Creating ${variant.name} variant...`);
-        let processedBuffer;
-        
-        try {
-          if (variant.name === 'full') {
-            // For full-size, just convert format without resizing, preserve metadata
-            processedBuffer = await image
-              .rotate() // Auto-rotate based on EXIF orientation data
-              .withMetadata() // Preserve EXIF metadata
-              .heif({ quality: variant.quality, compression: 'av1' })
-              .toBuffer();
-          } else if (variant.name === 'thumbnail') {
-            // For thumbnail, resize and convert
-            processedBuffer = await image
-              .rotate() // Auto-rotate based on EXIF orientation data
-              .resize(variant.width, variant.height, { 
-                fit: 'cover', 
-                position: 'center' 
-              })
-              .withMetadata() // Preserve EXIF metadata for thumbnails too
-              .heif({ quality: variant.quality, compression: 'av1' })
-              .toBuffer();
-          }
-        } catch (variantError) {
-          console.error(`[${new Date().toISOString()}] Failed to create ${variant.name} variant:`, variantError.message);
-          continue; // Skip this variant but continue with others
-        }
-
-        const filename = `${baseName}_${variant.name}.${variant.format === 'avif' ? 'avif' : variant.format}`;
-        const mimetype = `image/${variant.format === 'avif' ? 'avif' : variant.format}`;
-        console.log(`[${new Date().toISOString()}] ✓ Generated ${variant.name}: ${filename} (${(processedBuffer.length / 1024).toFixed(2)}KB)`);
-
-        results[variant.name] = {
-          buffer: processedBuffer,
-          filename: filename,
-          size: processedBuffer.length,
-          mimetype: mimetype,
-          dimensions: variant.name === 'full' ? {
-            width: metadata.width || 'unknown',
-            height: metadata.height || 'unknown'
-          } : {
-            width: variant.width,
-            height: variant.height
-          }
-        };
+      if (v.width && v.height) {
+        transformer = transformer.resize(v.width, v.height, {
+          fit: 'cover',
+          position: 'center'
+        });
       }
-      
-      console.log(`[${new Date().toISOString()}] HEIC processing completed: ${Object.keys(results).length} variants created`);
-      
-      // Force garbage collection if available
-      if (global.gc) {
-        global.gc();
-      }
-      
-      return results;
 
-    } catch (error) {
-      console.error(`[${new Date().toISOString()}] HEIC processing failed:`, error.message);
-      
-      // Force garbage collection on error
-      if (global.gc) {
-        global.gc();
-      }
-      
-      throw new Error(`HEIC processing failed: ${error.message}`);
+      const buf = await transformer.toBuffer();
+      transformer.destroy();
+
+      results[v.name] = {
+        filename: `${base}_${v.name}.avif`,
+        buffer: buf,
+        size: buf.length,
+        mimetype: 'image/avif',
+        dimensions: v.width
+          ? { width: v.width, height: v.height }
+          : { width: metadata.width, height: metadata.height }
+      };
+
+      if (global.gc) global.gc(); // encourage cleanup
     }
+
+    return results;
   }
 
-  /**
-   * Quick HEIC to AVIF conversion for immediate use
-   * @param {Buffer} heicBuffer 
-   * @param {Object} options 
-   */
-  async quickConvert(heicBuffer, options = {}) {
-    const {
-      quality = 85,
-      maxWidth = 1200,
-      maxHeight = 1200,
-      format = 'avif' // Default to AVIF for better compression
-    } = options;
-
-    if (!this.heicSupported) {
-      throw new Error('HEIC processing not supported');
-    }
-
-    // First convert HEIC to JPEG using heic-convert
-    const jpegBuffer = await heicConvert({
-      buffer: heicBuffer,
-      format: 'JPEG',
-      quality: 1 // Use maximum quality for intermediate conversion
-    });
-
-    // Then convert to desired format (AVIF/JPEG) and optionally resize with Sharp
-    let sharpImage = sharp(jpegBuffer);
-    
-    if (maxWidth || maxHeight) {
-      sharpImage = sharpImage.resize(maxWidth, maxHeight, {
-        fit: 'inside',
-        withoutEnlargement: true
-      });
-    }
-
-    if (format === 'avif') {
-      return await sharpImage.heif({ quality, compression: 'av1' }).toBuffer();
-    } else {
-      return await sharpImage.jpeg({ quality }).toBuffer();
-    }
-  }
-
-  /**
-   * Convert any image buffer to AVIF (for testing and general use)
-   * @param {Buffer} imageBuffer 
-   * @param {Object} options 
-   */
-  async convertToAvif(imageBuffer, options = {}) {
-    const {
-      quality = 85,
-      maxWidth = 1200,
-      maxHeight = 1200
-    } = options;
-
-    let sharpImage = sharp(imageBuffer);
-    
-    if (maxWidth || maxHeight) {
-      sharpImage = sharpImage.resize(maxWidth, maxHeight, {
-        fit: 'inside',
-        withoutEnlargement: true
-      });
-    }
-
-    return await sharpImage
-      .rotate() // Auto-rotate based on EXIF orientation data
-      .withMetadata() // Preserve EXIF metadata
-      .heif({ quality, compression: 'av1' })
-      .toBuffer();
-  }
-
-  /**
-   * Check if file is HEIC format
-   */
-  static isHeicFile(filename) {
+  static isHeic(filename) {
     return /\.(heic|heif)$/i.test(filename);
-  }
-
-  /**
-   * Get Sharp installation instructions
-   */
-  static getInstallInstructions() {
-    return `
-To enable HEIC processing, install Sharp with HEIC support:
-
-npm uninstall sharp
-npm install --platform=darwin --arch=x64 sharp
-# or for Linux:
-# npm install --platform=linux --arch=x64 sharp
-
-For production, you may also need:
-sudo apt-get install libheif-dev  # Ubuntu/Debian
-# or
-brew install libheif  # macOS
-    `;
   }
 }
 
 /**
- * Process image file: HEIC -> AVIF variants (full + thumbnail)
- * @param {string} inputPath - Path to input image file (HEIC or other)
- * @param {string} outputDir - Directory to save output AVIF files
- * @returns {Object} Result object with success status and file info
+ * Process a HEIC image file and write output variants to disk
+ * @param {string} inputPath
+ * @param {string} outputDir
  */
 async function processImage(inputPath, outputDir) {
-  try {
-    // Validate input file exists
-    if (!fs.existsSync(inputPath)) {
-      throw new Error(`Input file does not exist: ${inputPath}`);
-    }
+  if (!fs.existsSync(inputPath)) throw new Error(`Not found: ${inputPath}`);
+  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-    // Create output directory if it doesn't exist
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true });
-    }
+  const inputBuffer = fs.readFileSync(inputPath);
+  const name = path.basename(inputPath);
+  if (!HeicProcessor.isHeic(name)) throw new Error('Only HEIC/HEIF input allowed');
 
-    // Read input file
-    const inputBuffer = fs.readFileSync(inputPath);
-    const fileName = path.basename(inputPath);
+  const processor = new HeicProcessor();
+  const variants = await processor.convert(inputBuffer, name);
 
-    // Initialize processor
-    const processor = new HeicProcessor();
-    
-    // Determine if it's a HEIC file
-    const isHeic = HeicProcessor.isHeicFile(fileName);
-    let results;
-
-    if (isHeic) {
-      // Process HEIC file (creates full + thumbnail variants)
-      results = await processor.processHeicFile(inputBuffer, fileName);
-    } else {
-      // For non-HEIC files, use convertToAvif to create similar variants
-      const baseName = path.parse(fileName).name;
-      
-      // Create full-size variant
-      const fullBuffer = await processor.convertToAvif(inputBuffer, { 
-        quality: 90,
-        maxWidth: null,
-        maxHeight: null 
-      });
-      
-      // Create thumbnail variant
-      const thumbnailBuffer = await processor.convertToAvif(inputBuffer, {
-        quality: 80,
-        maxWidth: 300,
-        maxHeight: 300
-      });
-
-      results = {
-        full: {
-          buffer: fullBuffer,
-          filename: `${baseName}_full.avif`,
-          size: fullBuffer.length,
-          mimetype: 'image/avif'
-        },
-        thumbnail: {
-          buffer: thumbnailBuffer,
-          filename: `${baseName}_thumbnail.avif`,
-          size: thumbnailBuffer.length,
-          mimetype: 'image/avif'
-        }
-      };
-    }
-
-    // Save all variants to output directory
-    const savedFiles = [];
-    for (const [variantName, variant] of Object.entries(results)) {
-      const outputPath = path.join(outputDir, variant.filename);
-      fs.writeFileSync(outputPath, variant.buffer);
-      savedFiles.push({
-        variant: variantName,
-        file: outputPath,
-        size: `${(variant.size / 1024).toFixed(2)}KB`
-      });
-    }
-
-    return { success: true, files: savedFiles };
-
-  } catch (error) {
-    return { success: false, error: error.message };
+  const saved = [];
+  for (const key in variants) {
+    const v = variants[key];
+    const outPath = path.join(outputDir, v.filename);
+    fs.writeFileSync(outPath, v.buffer);
+    saved.push({ variant: key, path: outPath, sizeKB: (v.size / 1024).toFixed(1) });
   }
+
+  return { success: true, files: saved };
 }
 
 module.exports = { HeicProcessor, processImage };
