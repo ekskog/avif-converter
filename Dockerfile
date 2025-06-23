@@ -1,4 +1,4 @@
-# === Builder stage: Compile HEVC-capable libraries ===
+# === CopIlot Builder stage: Compile HEVC-capable libraries ===
 FROM alpine:3.20 AS builder
 
 WORKDIR /build
