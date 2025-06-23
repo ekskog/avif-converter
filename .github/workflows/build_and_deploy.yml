@@ -17,18 +17,23 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Generate short SHA tag
+      - name: Set short SHA tag
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
 
-      - name: Determine if app code changed
-        id: changes
+      - name: Check for app changes
+        id: app-changes
         run: |
-          if git diff --name-only HEAD~1 HEAD | grep -vE '^(\.github/|k8s/)' | grep -q .; then
-            echo "APP_CHANGED=true" >> $GITHUB_ENV
-            echo "✅ App source changed. Image will be rebuilt."
+          if [ "$(git rev-list --count HEAD)" -gt 1 ]; then
+            if git diff --name-only HEAD~1 HEAD | grep -vE '^(\.github/|k8s/)' | grep -q .; then
+              echo "APP_CHANGED=true" >> $GITHUB_ENV
+              echo "✅ App source changed. Will build."
+            else
+              echo "APP_CHANGED=false" >> $GITHUB_ENV
+              echo "♻️  Only CI/K8s files changed. Skipping build."
+            fi
           else
-            echo "APP_CHANGED=false" >> $GITHUB_ENV
-            echo "♻️  No app changes. Skipping image build."
+            echo "APP_CHANGED=true" >> $GITHUB_ENV
+            echo "🆕 First push or shallow clone. Building image."
           fi
 
       - name: Set up Docker Buildx
@@ -47,7 +52,7 @@ jobs:
         if: env.APP_CHANGED == 'true'
         run: |
           IMAGE_TAG=${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
-          echo "🛠 Building and pushing: $IMAGE_TAG"
+          echo "📦 Building and pushing: $IMAGE_TAG"
           docker buildx build \
             --platform ${{ env.PLATFORM }} \
             --tag $IMAGE_TAG \
@@ -55,15 +60,19 @@ jobs:
             --progress=plain \
             .
 
-      - name: Verify Pushed Image
+      - name: Verify Image Push
         if: env.APP_CHANGED == 'true'
-        run: docker manifest inspect ${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
+        run: |
+          docker manifest inspect ${{ env.IMAGE_NAME }}:${{ env.SHORT_SHA }}
 
-      - name: Set up KUBECONFIG
+      - name: Set up kubeconfig
         run: |
           echo "${{ secrets.KUBECONFIG }}" > kubeconfig.yaml
           echo "KUBECONFIG=$PWD/kubeconfig.yaml" >> $GITHUB_ENV
-          test -s kubeconfig.yaml || (echo "❌ kubeconfig.yaml is empty" && exit 1)
+          if [ ! -s kubeconfig.yaml ]; then
+            echo "❌ kubeconfig.yaml is empty!"
+            exit 1
+          fi
 
       - name: Deploy to Kubernetes
         run: |
