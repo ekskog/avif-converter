@@ -27,6 +27,7 @@ const upload = multer({
 
 // Health endpoint
 app.get('/health', (req, res) => {
+  console.log(`[${new Date().toISOString()}] Health check request received`);
   res.json({ 
     status: 'ok', 
     service: 'avif-converter',

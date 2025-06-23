@@ -17,7 +17,7 @@ class HeicProcessor {
    * @returns {Object} Processed variants
    */
   async processHeicFile(heicBuffer, fileName) {
-    console.log(`Processing HEIC file...`);
+    console.log(`[${new Date().toISOString()}] Processing HEIC file...`);
     
     // Check file size limit to prevent memory issues
     const maxSizeMB = 100; // 100MB limit
@@ -34,17 +34,14 @@ class HeicProcessor {
     const results = {};
 
     try {
-      // First convert HEIC to JPEG using heic-convert with timeout
-      console.log('Converting HEIC to JPEG...');
-      const jpegBuffer = await Promise.race([
-        heicConvert({
-          buffer: heicBuffer,
-          format: 'JPEG',
-          quality: 1 // Use maximum quality for initial conversion
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('HEIC conversion timeout')), 120000)) // 2 minutes timeout
-      ]);
-      console.log('HEIC conversion complete');
+      // First convert HEIC to JPEG using heic-convert
+      console.log(`[${new Date().toISOString()}] Converting HEIC to JPEG...`);
+      const jpegBuffer = await heicConvert({
+        buffer: heicBuffer,
+        format: 'JPEG',
+        quality: 1 // Use maximum quality for initial conversion
+      });
+      console.log(`[${new Date().toISOString()}] HEIC conversion complete`);
 
       // Then use Sharp to create variants from the JPEG
       const image = sharp(jpegBuffer);
@@ -68,45 +65,39 @@ class HeicProcessor {
         }
       ];
 
-      // Process each variant with timeout protection
+      // Process each variant
       for (const variant of variants) {
-        console.log(`Creating ${variant.name} variant...`);
+        console.log(`[${new Date().toISOString()}] Creating ${variant.name} variant...`);
         let processedBuffer;
         
         try {
           if (variant.name === 'full') {
             // For full-size, just convert format without resizing, preserve metadata
-            processedBuffer = await Promise.race([
-              image
-                .rotate() // Auto-rotate based on EXIF orientation data
-                .withMetadata() // Preserve EXIF metadata
-                .heif({ quality: variant.quality, compression: 'av1' })
-                .toBuffer(),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('Sharp processing timeout')), 180000)) // 3 minutes timeout
-            ]);
+            processedBuffer = await image
+              .rotate() // Auto-rotate based on EXIF orientation data
+              .withMetadata() // Preserve EXIF metadata
+              .heif({ quality: variant.quality, compression: 'av1' })
+              .toBuffer();
           } else if (variant.name === 'thumbnail') {
             // For thumbnail, resize and convert
-            processedBuffer = await Promise.race([
-              image
-                .rotate() // Auto-rotate based on EXIF orientation data
-                .resize(variant.width, variant.height, { 
-                  fit: 'cover', 
-                  position: 'center' 
-                })
-                .withMetadata() // Preserve EXIF metadata for thumbnails too
-                .heif({ quality: variant.quality, compression: 'av1' })
-                .toBuffer(),
-              new Promise((_, reject) => setTimeout(() => reject(new Error('Sharp processing timeout')), 60000)) // 1 minute timeout for thumbnails
-            ]);
+            processedBuffer = await image
+              .rotate() // Auto-rotate based on EXIF orientation data
+              .resize(variant.width, variant.height, { 
+                fit: 'cover', 
+                position: 'center' 
+              })
+              .withMetadata() // Preserve EXIF metadata for thumbnails too
+              .heif({ quality: variant.quality, compression: 'av1' })
+              .toBuffer();
           }
         } catch (variantError) {
-          console.error(`Failed to create ${variant.name} variant:`, variantError.message);
+          console.error(`[${new Date().toISOString()}] Failed to create ${variant.name} variant:`, variantError.message);
           continue; // Skip this variant but continue with others
         }
 
         const filename = `${baseName}_${variant.name}.${variant.format === 'avif' ? 'avif' : variant.format}`;
         const mimetype = `image/${variant.format === 'avif' ? 'avif' : variant.format}`;
-        console.log(`✓ Generated ${variant.name}: ${filename} (${(processedBuffer.length / 1024).toFixed(2)}KB)`);
+        console.log(`[${new Date().toISOString()}] ✓ Generated ${variant.name}: ${filename} (${(processedBuffer.length / 1024).toFixed(2)}KB)`);
 
         results[variant.name] = {
           buffer: processedBuffer,
@@ -123,7 +114,7 @@ class HeicProcessor {
         };
       }
       
-      console.log(`HEIC processing completed: ${Object.keys(results).length} variants created`);
+      console.log(`[${new Date().toISOString()}] HEIC processing completed: ${Object.keys(results).length} variants created`);
       
       // Force garbage collection if available
       if (global.gc) {
@@ -133,7 +124,7 @@ class HeicProcessor {
       return results;
 
     } catch (error) {
-      console.error(`HEIC processing failed:`, error.message);
+      console.error(`[${new Date().toISOString()}] HEIC processing failed:`, error.message);
       
       // Force garbage collection on error
       if (global.gc) {
