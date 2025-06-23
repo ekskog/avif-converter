@@ -6,11 +6,10 @@ WORKDIR /build
 # Install build tools and dependencies
 RUN apk add --no-cache \
   build-base git curl cmake pkgconfig \
-  autoconf automake libtool nasm yasm \
   zlib-dev x265-dev libjpeg-turbo-dev libpng-dev libexif-dev expat-dev \
-  aom-dev gettext-dev glib-dev
+  aom-dev glib-dev
 
-# Build libde265 (HEVC decoder) using CMake
+# Build libde265 (HEVC decoder)
 RUN git clone https://github.com/strukturag/libde265.git && \
   cd libde265 && mkdir build && cd build && \
   cmake .. -DCMAKE_INSTALL_PREFIX=/usr && \
@@ -18,8 +17,8 @@ RUN git clone https://github.com/strukturag/libde265.git && \
 
 # Build libheif with libde265 and x265 support
 RUN git clone https://github.com/strukturag/libheif.git && \
-  cd libheif && ./autogen.sh && \
-  ./configure --prefix=/usr --enable-x265 --enable-libde265 && \
+  cd libheif && mkdir build && cd build && \
+  cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DWITH_X265=ON -DWITH_LIBDE265=ON && \
   make -j$(nproc) && make install
 
 # Build libvips
