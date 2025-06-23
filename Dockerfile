@@ -1,4 +1,4 @@
-# === CopIlot Builder stage: Compile HEVC-capable libraries ===
+# === Builder stage: Compile HEVC-capable libraries ===
 FROM alpine:3.20 AS builder
 
 WORKDIR /build
@@ -35,21 +35,20 @@ FROM node:18-alpine
 
 WORKDIR /app
 
-# Runtime dependencies for custom libvips (including curl for test image)
+# Runtime dependencies for custom libvips
 RUN apk add --no-cache \
   libc6-compat libjpeg-turbo libpng libexif expat zlib curl
 
-# Copy built libraries
+# Copy compiled libraries
 COPY --from=builder /usr /usr
-
-# Add test HEIC image for debugging/validation
-RUN mkdir -p /test-images && \
-  curl -fL -o /test-images/sample.heic https://github.com/alexcorvi/heic2any/raw/master/demo/flower.heic
 
 # Copy app files
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY *.js ./
+
+# Copy local HEIC sample into container for testing
+COPY heicsamples/test.heic /test-images/test.heic
 
 # Environment variables for Sharp
 ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
