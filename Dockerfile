@@ -1,61 +1,55 @@
-# Multi-stage build for AVIF converter microservice
-FROM node:18-alpine AS builder
+# === Builder stage: Compile dependencies with HEVC support ===
+FROM alpine:3.20 AS builder
 
-# Set working directory
+WORKDIR /build
+
+# Install build tools & dependencies
+RUN apk add --no-cache \
+    build-base git curl pkgconfig autoconf automake libtool cmake nasm yasm \
+    zlib-dev x265-dev libjpeg-turbo-dev libpng-dev libexif-dev expat-dev \
+    aom-dev
+
+# Build libde265
+RUN git clone https://github.com/strukturag/libde265.git && \
+    cd libde265 && ./autogen.sh && ./configure --prefix=/usr && make -j$(nproc) && make install
+
+# Build libheif with libde265 and x265 support
+RUN git clone https://github.com/strukturag/libheif.git && \
+    cd libheif && ./autogen.sh && \
+    ./configure --prefix=/usr --enable-x265 --enable-libde265 && \
+    make -j$(nproc) && make install
+
+# Build libvips
+RUN curl -LO https://github.com/libvips/libvips/releases/download/v8.15.2/vips-8.15.2.tar.gz && \
+    tar -xzf vips-8.15.2.tar.gz && cd vips-8.15.2 && \
+    ./configure --prefix=/usr && make -j$(nproc) && make install
+
+# === Runtime stage: Lean Node app with sharp + HEVC-ready vips ===
+FROM node:18-alpine
+
 WORKDIR /app
 
-# Copy package files first for better caching
+# Install vips runtime dependencies
+RUN apk add --no-cache \
+    libc6-compat libjpeg-turbo libpng libexif expat zlib
+
+# Copy custom vips + heif libs from builder
+COPY --from=builder /usr /usr
+
+# Copy app source and dependencies
 COPY package*.json ./
+RUN npm ci --omit=dev
 
-# Install ALL dependencies (including dev)
-RUN npm ci
-
-# Copy source code
 COPY *.js ./
 
-# Production stage
-FROM node:18-alpine AS production
-
-# Install only runtime dependencies needed for sharp and heic processing
-RUN apk add --no-cache \
-    vips-dev \
-    libc6-compat \
-    libheif \
-    && rm -rf /var/cache/apk/*
-
-# Set environment variables to suppress AVIF warnings
-ENV AOM_DISABLE_CPU_CHECKS=1
+# Set sharp env vars
 ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
+ENV NODE_ENV=production
 
-# Create app user for security
-RUN addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001
-
-# Set working directory
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install only production dependencies
-RUN npm ci --only=production && npm cache clean --force
-
-# Copy built application from builder stage
-COPY --from=builder /app/*.js ./
-
-# Create necessary directories and set permissions
-RUN mkdir -p uploads temp-output && \
-    chown -R nodejs:nodejs /app
-
-# Switch to non-root user
+# Create secure user
+RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 USER nodejs
 
-# Expose port
 EXPOSE 3001
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD node -e "const http = require('http'); http.get('http://localhost:3001/health', (res) => { process.exit(res.statusCode === 200 ? 0 : 1) }).on('error', () => process.exit(1))"
-
-# Start the application
 CMD ["node", "api.js"]
