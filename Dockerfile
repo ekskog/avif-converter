@@ -22,8 +22,8 @@ RUN git clone https://github.com/strukturag/libheif.git && \
   make -j$(nproc) && make install
 
 # Build libvips
-RUN curl -LO https://github.com/libvips/libvips/releases/download/v8.15.2/vips-8.15.2.tar.gz && \
-  tar -xzf vips-8.15.2.tar.gz && cd vips-8.15.2 && \
+RUN curl -fL -o vips.tar.gz https://github.com/libvips/libvips/releases/download/v8.15.2/vips-8.15.2.tar.gz && \
+  tar -xzf vips.tar.gz && cd vips-8.15.2 && \
   ./configure --prefix=/usr && make -j$(nproc) && make install
 
 # === Runtime stage: Alpine + custom libvips + app ===
@@ -35,20 +35,19 @@ WORKDIR /app
 RUN apk add --no-cache \
   libc6-compat libjpeg-turbo libpng libexif expat zlib
 
-# Copy built libs from builder stage
+# Copy built libraries from builder stage
 COPY --from=builder /usr /usr
 
-# Copy app source and install dependencies
+# Copy application and install dependencies
 COPY package*.json ./
 RUN npm ci --omit=dev
-
 COPY *.js ./
 
-# Configure Sharp to use custom libvips
+# Environment setup for sharp
 ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
 ENV NODE_ENV=production
 
-# Create non-root user
+# Create secure non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 USER nodejs
 
