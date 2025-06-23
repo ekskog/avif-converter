@@ -21,10 +21,11 @@ RUN git clone https://github.com/strukturag/libheif.git && \
   cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DWITH_X265=ON -DWITH_LIBDE265=ON && \
   make -j$(nproc) && make install
 
-# Build libvips
-RUN curl -fL -o vips.tar.gz https://github.com/libvips/libvips/releases/download/v8.15.2/vips-8.15.2.tar.gz && \
-  tar -xzf vips.tar.gz && cd vips-8.15.2 && \
-  ./configure --prefix=/usr && make -j$(nproc) && make install
+# Build libvips from GitHub source archive
+ENV VIPSVERSION=8.15.2
+RUN curl -fL -o vips.tar.gz https://github.com/libvips/libvips/archive/refs/tags/v${VIPSVERSION}.tar.gz && \
+  tar -xzf vips.tar.gz && cd libvips-${VIPSVERSION} && \
+  ./autogen.sh && ./configure --prefix=/usr && make -j$(nproc) && make install
 
 # === Runtime stage: Alpine + custom libvips + app ===
 FROM node:18-alpine
