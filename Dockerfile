@@ -30,28 +30,32 @@ RUN curl -fL -o vips.tar.gz https://github.com/libvips/libvips/archive/refs/tags
   meson compile -C build && \
   meson install -C build
 
-# === Runtime stage: Lean production image with node + vips ===
+# === Runtime stage: Lean production image with libvips + Node ===
 FROM node:18-alpine
 
 WORKDIR /app
 
-# Runtime dependencies for libvips
+# Runtime dependencies for custom libvips
 RUN apk add --no-cache \
-  libc6-compat libjpeg-turbo libpng libexif expat zlib
+  libc6-compat libjpeg-turbo libpng libexif expat zlib curl
 
-# Copy custom-built libraries
+# Copy compiled libraries from builder
 COPY --from=builder /usr /usr
 
-# Copy app files and install dependencies
+# Copy application and install deps
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY *.js ./
 
-# Set environment flags for sharp
+# Pull a test HEIC image into /test-images for validation
+RUN mkdir -p /test-images && \
+  curl -fL -o /test-images/sample.heic https://github.com/alexcorvi/heic2any/raw/master/demo/flower.heic
+
+# Disable sharp cache
 ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
 ENV NODE_ENV=production
 
-# Create secure user
+# Create secure non-root user
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 USER nodejs
 
