@@ -16,10 +16,11 @@ RUN git clone https://github.com/strukturag/libde265.git && \
   cmake .. -DCMAKE_INSTALL_PREFIX=/usr && \
   make -j$(nproc) && make install
 
-# Build libheif with libde265 and x265 support
+# Build libheif with embedded codec support (no plugin loading)
 RUN git clone https://github.com/strukturag/libheif.git && \
   cd libheif && mkdir build && cd build && \
-  cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DWITH_X265=ON -DWITH_LIBDE265=ON && \
+  cmake .. -DCMAKE_INSTALL_PREFIX=/usr \
+    -DWITH_X265=ON -DWITH_LIBDE265=ON -DENABLE_PLUGIN_LOADING=OFF && \
   make -j$(nproc) && make install
 
 # Build libvips from source using Meson
@@ -30,33 +31,35 @@ RUN curl -fL -o vips.tar.gz https://github.com/libvips/libvips/archive/refs/tags
   meson compile -C build && \
   meson install -C build
 
-# === Runtime stage: Lean production image with libvips + Node ===
+# === Runtime stage: Production Node + libvips + healthcheck ===
 FROM node:18-alpine
 
 WORKDIR /app
 
-# Runtime dependencies for custom libvips
+# Install runtime dependencies
 RUN apk add --no-cache \
   libc6-compat libjpeg-turbo libpng libexif expat zlib curl
 
 # Copy compiled libraries
 COPY --from=builder /usr /usr
 
-# Copy app files
+# Copy app files and test HEIC
 COPY package*.json ./
 RUN npm ci --omit=dev
-COPY *.js ./
+COPY . .
 
-# Copy local HEIC sample into container for testing
-COPY heicsamples/test.heic /test-images/test.heic
-
-# Environment variables for Sharp
+# Set environment variables for Sharp to use system libvips
 ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
 ENV NODE_ENV=production
 
-# Create unprivileged user
-RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
+# Create secure non-root user
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nodejs -u 1001
 USER nodejs
+
+# Add healthcheck (uses healthcheck.js)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD node healthcheck.js || exit 1
 
 EXPOSE 3001
 CMD ["node", "api.js"]
