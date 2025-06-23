@@ -1,4 +1,4 @@
-# === Builder stage ===
+# === Builder stage: Build HEIC-capable system libvips ===
 FROM alpine:3.20 AS builder
 
 WORKDIR /build
@@ -7,66 +7,64 @@ RUN apk add --no-cache \
   build-base git curl cmake pkgconfig \
   meson ninja python3 \
   zlib-dev x265-dev libjpeg-turbo-dev libpng-dev libexif-dev expat-dev \
-  aom-dev glib-dev gettext-dev
+  aom-dev glib-dev gettext-dev ffmpeg-dev
 
-# Build libde265
-RUN git clone https://github.com/strukturag/libde265.git && \
+# libde265
+RUN git clone --depth=1 https://github.com/strukturag/libde265 && \
   cd libde265 && mkdir build && cd build && \
   cmake .. -DCMAKE_INSTALL_PREFIX=/usr && \
   make -j$(nproc) && make install
 
-# Build libheif with static codec support (HEVC / libde265) and plugin loading disabled
-RUN git clone https://github.com/strukturag/libheif.git && \
+# libheif with plugin loading disabled
+RUN git clone --depth=1 https://github.com/strukturag/libheif && \
   cd libheif && mkdir build && cd build && \
   cmake .. -DCMAKE_INSTALL_PREFIX=/usr \
     -DWITH_X265=ON -DWITH_LIBDE265=ON \
-    -DENABLE_PLUGIN_LOADING=OFF && \
+    -DWITH_FFMPEG=ON -DENABLE_PLUGIN_LOADING=OFF && \
   make -j$(nproc) && make install
 
-# Build libvips
-ENV VIPSVERSION=8.15.2
-RUN curl -LO https://github.com/libvips/libvips/releases/download/v${VIPSVERSION}/vips-${VIPSVERSION}.tar.gz && \
-  tar xzf vips-${VIPSVERSION}.tar.gz && cd vips-${VIPSVERSION} && \
+# libvips from Git
+RUN git clone --depth=1 --branch v8.14.5 https://github.com/libvips/libvips.git && \
+  cd libvips && \
   meson setup build --prefix=/usr --buildtype=release && \
   meson compile -C build && \
   meson install -C build
 
-# === Final image ===
+# === Final stage: Runtime with Node, Sharp, and system libvips ===
 FROM node:18-alpine
 
 WORKDIR /app
 
 RUN apk add --no-cache \
-  libc6-compat libjpeg-turbo libpng libexif expat zlib curl bash
+  libc6-compat libjpeg-turbo libpng libexif expat zlib curl ffmpeg
 
-# Copy compiled image libraries
+# Copy HEIC-capable libraries
 COPY --from=builder /usr /usr
 
-# Copy app files
+# App deps
 COPY package*.json ./
 
-# ⚠️ Tell sharp to build against system libvips
+# Force Sharp to use our system libvips
 ENV SHARP_IGNORE_GLOBAL_LIBVIPS=0
 ENV npm_config_build_from_source=true
 
-# Install and rebuild sharp properly
 RUN npm ci --omit=dev && npm rebuild sharp
 
-# Copy app source
+# App source
 COPY . .
 
-# Optional: remove dev artifacts to slim image
+# Optional: clean up
 RUN npm cache clean --force
 
-# Runtime
+# Runtime config
 ENV NODE_ENV=production
 
-# Create non-root user
+# Secure non-root user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 USER nodejs
 
-# Built-in healthcheck
+# Healthcheck script must exist in app root
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
   CMD node healthcheck.js || exit 1
 
