@@ -55,7 +55,9 @@ jobs:
           docker buildx build \
             --platform ${{ env.PLATFORM }} \
             --tag $IMAGE_TAG \
+            --tag ${{ env.IMAGE_NAME }}:latest \
             --push \
+            --no-cache \
             --progress=plain \
             .
 
