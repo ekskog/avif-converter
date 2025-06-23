@@ -6,11 +6,9 @@ WORKDIR /build
 # Install build tools and dependencies
 RUN apk add --no-cache \
   build-base git curl cmake pkgconfig \
+  meson ninja python3 \
   zlib-dev x265-dev libjpeg-turbo-dev libpng-dev libexif-dev expat-dev \
-  aom-dev glib-dev gettext-dev python3 py3-pip
-
-# Install Meson and Ninja for libvips build
-RUN pip3 install meson ninja
+  aom-dev glib-dev gettext-dev
 
 # Build libde265 (HEVC decoder)
 RUN git clone https://github.com/strukturag/libde265.git && \
@@ -24,7 +22,7 @@ RUN git clone https://github.com/strukturag/libheif.git && \
   cmake .. -DCMAKE_INSTALL_PREFIX=/usr -DWITH_X265=ON -DWITH_LIBDE265=ON && \
   make -j$(nproc) && make install
 
-# Build libvips from GitHub source archive using Meson
+# Build libvips from source using Meson
 ENV VIPSVERSION=8.15.2
 RUN curl -fL -o vips.tar.gz https://github.com/libvips/libvips/archive/refs/tags/v${VIPSVERSION}.tar.gz && \
   tar -xzf vips.tar.gz && cd libvips-${VIPSVERSION} && \
@@ -32,28 +30,28 @@ RUN curl -fL -o vips.tar.gz https://github.com/libvips/libvips/archive/refs/tags
   meson compile -C build && \
   meson install -C build
 
-# === Runtime stage: Alpine + custom libvips + app ===
+# === Runtime stage: Lean production image with node + vips ===
 FROM node:18-alpine
 
 WORKDIR /app
 
-# Runtime dependencies for custom libvips
+# Runtime dependencies for libvips
 RUN apk add --no-cache \
   libc6-compat libjpeg-turbo libpng libexif expat zlib
 
-# Copy built libraries from builder stage
+# Copy custom-built libraries
 COPY --from=builder /usr /usr
 
-# Copy application and install dependencies
+# Copy app files and install dependencies
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY *.js ./
 
-# Environment setup for sharp
+# Set environment flags for sharp
 ENV SHARP_IGNORE_GLOBAL_LIBVIPS=1
 ENV NODE_ENV=production
 
-# Create secure non-root user
+# Create secure user
 RUN addgroup -g 1001 -S nodejs && adduser -S nodejs -u 1001
 USER nodejs
 
