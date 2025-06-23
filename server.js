@@ -1,6 +1,5 @@
 // HEIC Processing Module for PhotoVault API
 const sharp = require('sharp');
-const heicConvert = require('heic-convert');
 const fs = require('fs');
 const path = require('path');
 
