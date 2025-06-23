@@ -2,6 +2,7 @@
 const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
+const heicConvert = require('heic-convert');
 
 class HeicProcessor {
   constructor() {
