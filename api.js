@@ -7,7 +7,7 @@ const fs = require('fs');
 const app = express();
 const port = process.env.PORT || 3002;
 
-// Configure multer for file uploads
+// Configure multer for file uploads - this will handle file storage and validation
 const upload = multer({ 
   dest: 'uploads/',
   limits: {
