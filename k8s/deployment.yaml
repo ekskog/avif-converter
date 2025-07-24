@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: avif-converter
+  namespace: webapps
+  labels:
+    app: avif-converter
+spec:
+  replicas: 1
+  revisionHistoryLimit: 1
+  selector:
+    matchLabels:
+      app: avif-converter
+  template:
+    metadata:
+      labels:
+        app: avif-converter
+    spec:
+      containers:
+      - name: avif-converter
+        image: ghcr.io/ekskog/avif-converter:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        envFrom:
+        - configMapRef:
+            name: avif-converter-config
+        - secretRef:
+            name: avif-converter-secret
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
