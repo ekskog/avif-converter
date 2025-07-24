@@ -1,7 +1,10 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.responses import Response
 from converter import convert_to_avif
 import psutil
 import os
+import subprocess
+import base64
 
 app = FastAPI()
 
@@ -41,25 +44,41 @@ async def health_check():
 
 @app.post("/convert")
 async def convert_image(image: UploadFile = File(...)):
+    print(f"[CONVERT] Received request with mimeType: {image.content_type}")
+    print(f"[CONVERT] Uploaded file details: filename={image.filename}, content_type={image.content_type}")
+
     memory_before = get_memory_info()
     print(f"[CONVERT] Starting conversion - Memory before: {memory_before}")
 
-    if image.content_type not in ["image/jpeg", "image/heic"]:
+    # Use content_type from the uploaded file instead of mimeType
+    mimeType = image.content_type
+
+    if mimeType not in ["image/jpeg", "image/heic"]:
         raise HTTPException(status_code=400, detail="Only JPEG and HEIC images are supported.")
 
-    file_type = "jpeg" if image.content_type == "image/jpeg" else "heic"
+    file_type = "jpeg" if mimeType == "image/jpeg" else "heic"
     image_data = await image.read()
+
+    print(f"[CONVERT] Received file size: {len(image_data)} bytes")
+    print(f"[CONVERT] File type determined: {file_type}")
 
     try:
         avif_data = convert_to_avif(image_data, file_type, image.filename)
+        avif_data_base64 = base64.b64encode(avif_data).decode('utf-8')
         memory_after = get_memory_info()
         print(f"[CONVERT] Conversion completed - Memory after: {memory_after}")
+        base64_content = base64.b64encode(avif_data).decode('utf-8')
         return {
-            "filename": image.filename,
-            "file_type": file_type,
-            "memory_before": memory_before,
-            "memory_after": memory_after,
-            "avif_data": avif_data
+            "success": True,
+            "data": {
+                "fullSize": {
+                    "filename": image.filename,
+                    "content": base64_content,
+                    "size": len(avif_data),
+                    "mimetype": "image/avif",
+                    "variant": "full"
+                }
+            }
         }
     except Exception as e:
         print(f"[CONVERT] Conversion failed: {str(e)}")

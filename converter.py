@@ -56,6 +56,8 @@ def convert_to_avif(data: bytes, file_type: str, original_filename: str) -> byte
     """Unified function to convert HEIC or JPEG to AVIF."""
     memory_start = get_memory_usage()
     print(f"[CONVERTER] Starting {file_type.upper()} to AVIF conversion - Memory: {memory_start}MB")
+    print(f"[CONVERTER] Input data size: {len(data)} bytes")
+    print(f"[CONVERTER] Original filename: {original_filename}")
 
     try:
         if file_type.lower() == "heic":
