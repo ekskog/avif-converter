@@ -24,7 +24,13 @@ spec:
         - containerPort: 3000
           name: http
         resources:
-          readinessProbe:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+        readinessProbe:
           httpGet:
             path: /health
             port: 3000
@@ -38,9 +44,3 @@ spec:
           initialDelaySeconds: 10
           periodSeconds: 20
           failureThreshold: 3
-          requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
-            memory: "512Mi"
-            cpu: "1000m"
