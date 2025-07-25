@@ -21,7 +21,7 @@ spec:
         image: ghcr.io/ekskog/avif-converter:latest
         imagePullPolicy: Always
         ports:
-        - containerPort: 8000
+        - containerPort: 3000
           name: http
         resources:
           requests:

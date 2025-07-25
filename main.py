@@ -20,6 +20,8 @@ def get_memory_info():
 
 @app.get("/health")
 async def health_check():
+    print("🚦 Health check endpoint hit")
+
     memory = get_memory_info()
 
     # Check for avifenc availability
@@ -28,8 +30,12 @@ async def health_check():
         result = subprocess.run(["avifenc", "--version"], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             avifenc_available = True
-    except:
-        pass
+    except Exception as e:
+        print(f"⚠️ avifenc check error: {e}")
+
+    print(f"[HEALTH] Memory usage: {memory}")       
+    print(f"[HEALTH] avifenc available: {avifenc_available}")
+    print(f"[HEALTH] Service status: {'healthy' if is_healthy else 'unhealthy'}")        
 
     is_healthy = avifenc_available
 
@@ -41,6 +47,8 @@ async def health_check():
             "avifenc": avifenc_available
         }
     }
+
+
 
 @app.post("/convert")
 async def convert_image(image: UploadFile = File(...)):
