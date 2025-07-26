@@ -5,8 +5,16 @@ import psutil
 import os
 import subprocess
 import base64
+import logging
 
 app = FastAPI()
+
+# Mute FastAPI's default logging for /health endpoint
+class HealthEndpointFilter(logging.Filter):
+    def filter(self, record):
+        return "/health" not in record.getMessage()
+
+logging.getLogger("uvicorn.access").addFilter(HealthEndpointFilter())
 
 def get_memory_info():
     """Get current memory usage information"""
