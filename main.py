@@ -73,7 +73,6 @@ async def convert_image(image: UploadFile = File(...)):
 
     try:
         avif_data = convert_to_avif(image_data, file_type, image.filename)
-        avif_data_base64 = base64.b64encode(avif_data).decode('utf-8')
         memory_after = get_memory_info()
         print(f"[CONVERT] Conversion completed - Memory after: {memory_after}")
         base64_content = base64.b64encode(avif_data).decode('utf-8')
