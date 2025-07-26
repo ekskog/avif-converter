@@ -20,40 +20,35 @@ def get_memory_info():
 
 @app.get("/health")
 async def health_check():
-    print("🚦 Health check endpoint hit")
-
-    try:
-        memory = get_memory_info()
-        print(f"[HEALTH] Memory usage: {memory}")
-    except Exception as e:
-        print(f"⚠️ Error fetching memory info: {e}")
-        memory = {"error": str(e)}
-
     avifenc_available = False
     try:
         result = subprocess.run(["avifenc", "--version"], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             avifenc_available = True
-        print(f"[HEALTH] avifenc available: {avifenc_available}")
     except Exception as e:
         print(f"⚠️ avifenc check error: {e}")
 
+    try:
+        memory = get_memory_info()
+    except Exception as e:
+        print(f"⚠️ Error fetching memory info: {e}")
+        memory = {"error": str(e)}
+
     is_healthy = avifenc_available
 
-    try:
-        return {
-            "status": "healthy" if is_healthy else "unhealthy",
-            "service": "avif-converter",
-            "memory": memory,
-            "capabilities": {
-                "avifenc": avifenc_available
-            }
+    if not is_healthy:
+        print("🚨 Health check FAILED")
+        print(f"[HEALTH] Memory usage: {memory}")
+        print(f"[HEALTH] avifenc available: {avifenc_available}")
+
+    return {
+        "status": "healthy" if is_healthy else "unhealthy",
+        "service": "avif-converter",
+        "memory": memory,
+        "capabilities": {
+            "avifenc": avifenc_available
         }
-    except Exception as e:
-        print(f"🚨 Error constructing health response: {e}")
-        raise
-
-
+    }
 
 
 @app.post("/convert")
