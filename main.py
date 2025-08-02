@@ -28,7 +28,7 @@ def get_memory_info():
 
 @app.get("/health")
 async def health_check():
-    logging.info("[HEALTH] Starting health check")
+    #logging.info("[HEALTH] Starting health check")
     avifenc_available = False
 
     try:
