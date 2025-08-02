@@ -30,16 +30,14 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "1000m"
-        readinessProbe:
-          httpGet:
-            path: /health
-            port: 3000
-          initialDelaySeconds: 5
-          periodSeconds: 10
-          failureThreshold: 3
+        
+        # Liveness probe only - comprehensive check twice per hour
+        # Pod becomes ready immediately when container starts
         livenessProbe:
           httpGet:
             path: /health
             port: 3000
-          initialDelaySeconds: 300  # Start after 5 minutes
-          periodSeconds: 300  # Check every 5 minutes
+          initialDelaySeconds: 30    # Wait 30 seconds after container starts
+          periodSeconds: 1800        # Check every 30 minutes (1800 seconds = twice per hour)
+          timeoutSeconds: 15         # Allow time for avifenc check
+          failureThreshold: 2        # Allow 2 failures before restarting pod
