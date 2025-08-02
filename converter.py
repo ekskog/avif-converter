@@ -6,6 +6,7 @@ import os
 import gc
 from PIL import Image
 import pillow_heif
+import logging
 
 # Register HEIF opener with Pillow
 pillow_heif.register_heif_opener()
@@ -30,9 +31,15 @@ def convert_heic_to_avif(heic_data: bytes, original_filename: str = "image.heic"
         image.save(jpeg_path, format="JPEG")
 
         # Convert JPEG to AVIF using avifenc
-        subprocess.run([
-            "avifenc", str(jpeg_path), str(output_path)
-        ], check=True)
+        try:
+            result = subprocess.run([
+                "avifenc", str(jpeg_path), str(output_path)
+            ], capture_output=True, text=True, check=True)
+            logging.info(f"[CONVERTER] avifenc stdout: {result.stdout}")
+            logging.info(f"[CONVERTER] avifenc stderr: {result.stderr}")
+        except subprocess.CalledProcessError as e:
+            logging.error(f"[CONVERTER] avifenc failed with error: {e.stderr}")
+            raise
 
         return output_path.read_bytes()
 
@@ -46,18 +53,24 @@ def convert_jpeg_to_avif(jpeg_data: bytes, original_filename: str = "image.jpg")
         input_path.write_bytes(jpeg_data)
 
         # Convert JPEG to AVIF using avifenc
-        subprocess.run([
-            "avifenc", str(input_path), str(output_path)
-        ], check=True)
+        try:
+            result = subprocess.run([
+                "avifenc", str(input_path), str(output_path)
+            ], capture_output=True, text=True, check=True)
+            logging.info(f"[CONVERTER] avifenc stdout: {result.stdout}")
+            logging.info(f"[CONVERTER] avifenc stderr: {result.stderr}")
+        except subprocess.CalledProcessError as e:
+            logging.error(f"[CONVERTER] avifenc failed with error: {e.stderr}")
+            raise
 
         return output_path.read_bytes()
 
 def convert_to_avif(data: bytes, file_type: str, original_filename: str) -> bytes:
     """Unified function to convert HEIC or JPEG to AVIF."""
     memory_start = get_memory_usage()
-    print(f"[CONVERTER] Starting {file_type.upper()} to AVIF conversion - Memory: {memory_start}MB")
-    print(f"[CONVERTER] Input data size: {len(data)} bytes")
-    print(f"[CONVERTER] Original filename: {original_filename}")
+    logging.info(f"[CONVERTER] Starting {file_type.upper()} to AVIF conversion - Memory: {memory_start}MB")
+    logging.info(f"[CONVERTER] Input data size: {len(data)} bytes")
+    logging.info(f"[CONVERTER] Original filename: {original_filename}")
 
     try:
         if file_type.lower() == "heic":
@@ -69,11 +82,11 @@ def convert_to_avif(data: bytes, file_type: str, original_filename: str) -> byte
 
         gc.collect()
         memory_end = get_memory_usage()
-        print(f"[CONVERTER] Conversion completed - Memory: {memory_end}MB (delta: {memory_end - memory_start:+.2f}MB)")
+        logging.info(f"[CONVERTER] Conversion completed - Memory: {memory_end}MB (delta: {memory_end - memory_start:+.2f}MB)")
 
         return result
     except Exception as e:
         gc.collect()
         memory_error = get_memory_usage()
-        print(f"[CONVERTER] Conversion failed - Memory after cleanup: {memory_error}MB")
+        logging.error(f"[CONVERTER] Conversion failed - Memory after cleanup: {memory_error}MB")
         raise e

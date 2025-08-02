@@ -28,28 +28,36 @@ def get_memory_info():
 
 @app.get("/health")
 async def health_check():
+    logging.info("[HEALTH] Starting health check")
     avifenc_available = False
+
     try:
+        logging.info("[HEALTH] Checking avifenc availability")
         result = subprocess.run(["avifenc", "--version"], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
             avifenc_available = True
+        logging.info(f"[HEALTH] avifenc available: {avifenc_available}")
+    except subprocess.TimeoutExpired:
+        logging.error("[HEALTH] avifenc check timed out")
     except Exception as e:
-        print(f"⚠️ avifenc check error: {e}")
+        logging.error(f"[HEALTH] avifenc check error: {e}")
 
     try:
+        logging.info("[HEALTH] Fetching memory info")
         memory = get_memory_info()
+        logging.info(f"[HEALTH] Memory info: {memory}")
     except Exception as e:
-        print(f"⚠️ Error fetching memory info: {e}")
+        logging.error(f"[HEALTH] Error fetching memory info: {e}")
         memory = {"error": str(e)}
 
     is_healthy = avifenc_available
 
     if not is_healthy:
-        print("🚨 Health check FAILED")
-        print(f"[HEALTH] Memory usage: {memory}")
-        print(f"[HEALTH] avifenc available: {avifenc_available}")
+        logging.warning("[HEALTH] Health check FAILED")
+        logging.warning(f"[HEALTH] Memory usage: {memory}")
+        logging.warning(f"[HEALTH] avifenc available: {avifenc_available}")
 
-    return {
+    response = {
         "status": "healthy" if is_healthy else "unhealthy",
         "service": "avif-converter",
         "memory": memory,
@@ -58,31 +66,35 @@ async def health_check():
         }
     }
 
+    logging.info(f"[HEALTH] Health check response: {response}")
+    return response
+
 
 @app.post("/convert")
 async def convert_image(image: UploadFile = File(...)):
-    print(f"[CONVERT] Received request with mimeType: {image.content_type}")
-    print(f"[CONVERT] Uploaded file details: filename={image.filename}, content_type={image.content_type}")
+    logging.info("[CONVERT] Received request")
+    logging.info(f"[CONVERT] Uploaded file details: filename={image.filename}, content_type={image.content_type}")
 
     memory_before = get_memory_info()
-    print(f"[CONVERT] Starting conversion - Memory before: {memory_before}")
+    logging.info(f"[CONVERT] Memory before conversion: {memory_before}")
 
-    # Use content_type from the uploaded file instead of mimeType
     mimeType = image.content_type
 
     if mimeType not in ["image/jpeg", "image/heic"]:
+        logging.error(f"[CONVERT] Unsupported mimeType: {mimeType}")
         raise HTTPException(status_code=400, detail="Only JPEG and HEIC images are supported.")
 
     file_type = "jpeg" if mimeType == "image/jpeg" else "heic"
     image_data = await image.read()
 
-    print(f"[CONVERT] Received file size: {len(image_data)} bytes")
-    print(f"[CONVERT] File type determined: {file_type}")
+    logging.info(f"[CONVERT] Received file size: {len(image_data)} bytes")
+    logging.info(f"[CONVERT] File type determined: {file_type}")
 
     try:
         avif_data = convert_to_avif(image_data, file_type, image.filename)
         memory_after = get_memory_info()
-        print(f"[CONVERT] Conversion completed - Memory after: {memory_after}")
+        logging.info(f"[CONVERT] Conversion completed successfully")
+        logging.info(f"[CONVERT] Memory after conversion: {memory_after}")
         base64_content = base64.b64encode(avif_data).decode('utf-8')
         return {
             "success": True,
@@ -97,5 +109,5 @@ async def convert_image(image: UploadFile = File(...)):
             }
         }
     except Exception as e:
-        print(f"[CONVERT] Conversion failed: {str(e)}")
+        logging.error(f"[CONVERT] Conversion failed: {str(e)}")
         raise HTTPException(status_code=500, detail="Conversion failed.")
