@@ -17,6 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy the application code
 COPY . .
 
+# Ensure logs are unbuffered
+ENV PYTHONUNBUFFERED=1
+
 # Expose the port the app runs on
 EXPOSE 3000
 

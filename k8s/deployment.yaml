@@ -40,6 +40,6 @@ spec:
         livenessProbe:
           httpGet:
             path: /health
-            port: 8000
+            port: 3000
           initialDelaySeconds: 300  # Start after 5 minutes
           periodSeconds: 300  # Check every 5 minutes
