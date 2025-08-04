@@ -6,10 +6,20 @@ import os
 import subprocess
 import base64
 import logging
+import tracemalloc
+import time
+import gc
 
 app = FastAPI()
 
-# Mute FastAPI's default logging for /health endpoint
+# 🔧 Configure visible logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[logging.StreamHandler()]
+)
+
+# 🚫 Filter out noise from /health logs
 class HealthEndpointFilter(logging.Filter):
     def filter(self, record):
         return "/health" not in record.getMessage()
@@ -28,7 +38,6 @@ def get_memory_info():
 
 @app.get("/health")
 async def health_check():
-    #logging.info("[HEALTH] Starting health check")
     avifenc_available = False
 
     try:
@@ -43,7 +52,6 @@ async def health_check():
         logging.error(f"[HEALTH] avifenc check error: {e}")
 
     try:
-        logging.info("[HEALTH] Fetching memory info")
         memory = get_memory_info()
         logging.info(f"[HEALTH] Memory info: {memory}")
     except Exception as e:
@@ -51,11 +59,6 @@ async def health_check():
         memory = {"error": str(e)}
 
     is_healthy = avifenc_available
-
-    if not is_healthy:
-        logging.warning("[HEALTH] Health check FAILED")
-        logging.warning(f"[HEALTH] Memory usage: {memory}")
-        logging.warning(f"[HEALTH] avifenc available: {avifenc_available}")
 
     response = {
         "status": "healthy" if is_healthy else "unhealthy",
@@ -69,14 +72,13 @@ async def health_check():
     logging.info(f"[HEALTH] Health check response: {response}")
     return response
 
-
 @app.post("/convert")
 async def convert_image(image: UploadFile = File(...)):
     logging.info("[CONVERT] Received request")
-    logging.info(f"[CONVERT] Uploaded file details: filename={image.filename}, content_type={image.content_type}")
+    logging.info(f"[CONVERT] Uploaded file: {image.filename}, type={image.content_type}")
 
     memory_before = get_memory_info()
-    logging.info(f"[CONVERT] Memory before conversion: {memory_before}")
+    logging.info(f"[CONVERT] Memory before: {memory_before}")
 
     mimeType = image.content_type
 
@@ -86,28 +88,7 @@ async def convert_image(image: UploadFile = File(...)):
 
     file_type = "jpeg" if mimeType == "image/jpeg" else "heic"
     image_data = await image.read()
+    logging.info(f"[CONVERT] File size: {len(image_data)} bytes")
 
-    logging.info(f"[CONVERT] Received file size: {len(image_data)} bytes")
-    logging.info(f"[CONVERT] File type determined: {file_type}")
-
-    try:
-        avif_data = convert_to_avif(image_data, file_type, image.filename)
-        memory_after = get_memory_info()
-        logging.info(f"[CONVERT] Conversion completed successfully")
-        logging.info(f"[CONVERT] Memory after conversion: {memory_after}")
-        base64_content = base64.b64encode(avif_data).decode('utf-8')
-        return {
-            "success": True,
-            "data": {
-                "fullSize": {
-                    "filename": image.filename,
-                    "content": base64_content,
-                    "size": len(avif_data),
-                    "mimetype": "image/avif",
-                    "variant": "full"
-                }
-            }
-        }
-    except Exception as e:
-        logging.error(f"[CONVERT] Conversion failed: {str(e)}")
-        raise HTTPException(status_code=500, detail="Conversion failed.")
+    tracemalloc.start()
+    start_time =
