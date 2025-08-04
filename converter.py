@@ -32,7 +32,7 @@ def convert_jpeg_to_avif(jpeg_data: bytes, original_filename: str = "image.jpg")
         return output_path.read_bytes()
 
 def convert_heic_to_avif_cli(heic_data: bytes, original_filename: str = "image.heic") -> bytes:
-    """HEIC to AVIF conversion using intermediate JPEG"""
+    """HEIC to AVIF conversion using ImageMagick and avifenc"""
     with tempfile.TemporaryDirectory() as tmpdir:
         heic_path = Path(tmpdir) / "input.heic"
         jpeg_path = Path(tmpdir) / "intermediate.jpg"
@@ -41,26 +41,23 @@ def convert_heic_to_avif_cli(heic_data: bytes, original_filename: str = "image.h
         heic_path.write_bytes(heic_data)
 
         try:
-            ffmpeg_cmd = [
-                "ffmpeg", "-y", "-i", str(heic_path),
-                "-q:v", "2", str(jpeg_path)
-            ]
-            subprocess.run(ffmpeg_cmd, capture_output=True, check=True)
-            logging.info(f"[CONVERTER] FFmpeg converted HEIC to JPEG")
+            subprocess.run([
+                "convert", str(heic_path), str(jpeg_path)
+            ], capture_output=True, check=True)
+            logging.info(f"[CONVERTER] ImageMagick converted HEIC to JPEG")
         except subprocess.CalledProcessError as e:
-            logging.error(f"[CONVERTER] FFmpeg JPEG conversion failed:\n{e.stderr.decode(errors='ignore')}")
+            logging.error(f"[CONVERTER] ImageMagick conversion failed:\n{e.stderr.decode(errors='ignore')}")
             raise RuntimeError("HEIC to JPEG conversion failed") from e
 
         try:
-            avifenc_cmd = [
+            result = subprocess.run([
                 "avifenc", "--speed", "6", "--jobs", "1",
                 str(jpeg_path), str(avif_path)
-            ]
-            result = subprocess.run(avifenc_cmd, capture_output=True, text=True, check=True)
+            ], capture_output=True, text=True, check=True)
             logging.info(f"[CONVERTER] avifenc stdout: {result.stdout}")
             logging.info(f"[CONVERTER] avifenc stderr: {result.stderr}")
         except subprocess.CalledProcessError as e:
-            logging.error(f"[CONVERTER] avifenc failed:\n{e.stderr.decode(errors='ignore')}")
+            logging.error(f"[CONVERTER] avifenc failed:\n{e.stderr}")
             raise RuntimeError("JPEG to AVIF conversion failed") from e
 
         return avif_path.read_bytes()

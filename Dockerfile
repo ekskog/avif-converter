@@ -8,7 +8,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y \
     libheif-dev \
     libavif-bin \
-    ffmpeg \
+    imagemagick \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
