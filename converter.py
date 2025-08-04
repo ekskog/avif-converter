@@ -32,36 +32,36 @@ def convert_jpeg_to_avif(jpeg_data: bytes, original_filename: str = "image.jpg")
         return output_path.read_bytes()
 
 def convert_heic_to_avif_cli(heic_data: bytes, original_filename: str = "image.heic") -> bytes:
-    """HEIC to AVIF conversion using ffmpeg and avifenc via CLI pipeline"""
+    """HEIC to AVIF conversion using intermediate JPEG"""
     with tempfile.TemporaryDirectory() as tmpdir:
         heic_path = Path(tmpdir) / "input.heic"
+        jpeg_path = Path(tmpdir) / "intermediate.jpg"
         avif_path = Path(tmpdir) / "output.avif"
 
         heic_path.write_bytes(heic_data)
 
-        ffmpeg_cmd = [
-            "ffmpeg", "-y", "-i", str(heic_path),
-            "-f", "yuv4mpegpipe", "-pix_fmt", "yuv420p", "-"
-        ]
-
-        avifenc_cmd = [
-            "avifenc", "--stdin", "--output", str(avif_path), "--speed", "6"
-        ]
+        try:
+            ffmpeg_cmd = [
+                "ffmpeg", "-y", "-i", str(heic_path),
+                "-q:v", "2", str(jpeg_path)
+            ]
+            subprocess.run(ffmpeg_cmd, capture_output=True, check=True)
+            logging.info(f"[CONVERTER] FFmpeg converted HEIC to JPEG")
+        except subprocess.CalledProcessError as e:
+            logging.error(f"[CONVERTER] FFmpeg JPEG conversion failed:\n{e.stderr.decode(errors='ignore')}")
+            raise RuntimeError("HEIC to JPEG conversion failed") from e
 
         try:
-            ffmpeg = subprocess.Popen(ffmpeg_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            avifenc = subprocess.run(avifenc_cmd, input=ffmpeg.stdout.read(), capture_output=True, check=True)
-            ffmpeg.stdout.close()
-            ffmpeg.wait()
-
-            logging.info(f"[CONVERTER] avifenc stdout: {avifenc.stdout.decode()}")
-            logging.info(f"[CONVERTER] avifenc stderr: {avifenc.stderr.decode()}")
+            avifenc_cmd = [
+                "avifenc", "--speed", "6", "--jobs", "1",
+                str(jpeg_path), str(avif_path)
+            ]
+            result = subprocess.run(avifenc_cmd, capture_output=True, text=True, check=True)
+            logging.info(f"[CONVERTER] avifenc stdout: {result.stdout}")
+            logging.info(f"[CONVERTER] avifenc stderr: {result.stderr}")
         except subprocess.CalledProcessError as e:
-            logging.error(f"[CONVERTER] HEIC conversion subprocess failed: {e.stderr}")
-            raise
-        except Exception as e:
-            logging.error(f"[CONVERTER] Exception during HEIC conversion: {str(e)}")
-            raise
+            logging.error(f"[CONVERTER] avifenc failed:\n{e.stderr.decode(errors='ignore')}")
+            raise RuntimeError("JPEG to AVIF conversion failed") from e
 
         return avif_path.read_bytes()
 
