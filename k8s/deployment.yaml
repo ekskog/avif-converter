@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: avif-converter
-  namespace: webapps
+  namespace: photovault
   labels:
     app: avif-converter
 spec:

@@ -62,5 +62,5 @@ jobs:
           sed -i "s|image: ghcr.io/ekskog/avif-converter:.*|image: $IMAGE_TAG|g" k8s/deployment.yaml
 
           # Apply the updated deployment YAML to ensure all changes (including replicas) are applied
-          kubectl apply -f k8s/deployment.yaml --kubeconfig=kubeconfig.yaml --namespace=webapps
-          kubectl apply -f k8s/service.yaml --kubeconfig=kubeconfig.yaml --namespace=webapps
+          kubectl apply -f k8s/deployment.yaml --kubeconfig=kubeconfig.yaml --namespace=photovault
+          kubectl apply -f k8s/service.yaml --kubeconfig=kubeconfig.yaml --namespace=photovault
