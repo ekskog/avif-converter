@@ -13,6 +13,7 @@ import gc
 
 app = FastAPI()
 
+# force rebuild image
 # 🔧 Enable logging with visible formatting
 logging.basicConfig(
     level=logging.INFO,
