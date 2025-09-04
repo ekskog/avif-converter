@@ -51,39 +51,28 @@ def get_file_size_mb(data: bytes) -> float:
     """Get file size in MB"""
     return round(len(data) / 1024 / 1024, 2)
 
-def monitor_subprocess_memory(process_name: str, cmd: list, **kwargs):
+def run_with_memory_monitoring(process_name: str, cmd: list, capture_output: bool = False, text: bool = False, check: bool = False):
     """Run subprocess with memory monitoring"""
     logging.info(f"[SUBPROCESS] Starting {process_name}: {' '.join(cmd)}")
     log_memory_state(f"PRE-{process_name}")
     
     try:
-        # Start the process
-        process = subprocess.Popen(cmd, **kwargs)
-        
-        # Monitor memory during execution
-        max_memory = get_memory_usage()
-        while process.poll() is None:
-            current_memory = get_memory_usage()
-            if current_memory > max_memory:
-                max_memory = current_memory
-            # Brief sleep to avoid overwhelming the system
-            import time
-            time.sleep(0.1)
-        
-        # Wait for completion and get result
-        stdout, stderr = process.communicate()
-        returncode = process.returncode
+        # Use subprocess.run for simplicity
+        if capture_output:
+            result = subprocess.run(cmd, capture_output=True, text=text, check=False)
+        else:
+            result = subprocess.run(cmd, check=False)
         
         log_memory_state(f"POST-{process_name}")
-        logging.info(f"[SUBPROCESS] {process_name} peak memory: {max_memory}MB")
-        logging.info(f"[SUBPROCESS] {process_name} return code: {returncode}")
+        logging.info(f"[SUBPROCESS] {process_name} return code: {result.returncode}")
         
-        if returncode != 0:
-            error_msg = stderr.decode(errors='ignore') if stderr else "Unknown error"
+        if result.returncode != 0:
+            error_msg = result.stderr if hasattr(result, 'stderr') and result.stderr else "Unknown error"
             logging.error(f"[SUBPROCESS] {process_name} failed: {error_msg}")
-            raise subprocess.CalledProcessError(returncode, cmd, output=stdout, stderr=stderr)
+            if check:
+                raise subprocess.CalledProcessError(result.returncode, cmd, output=result.stdout, stderr=result.stderr)
         
-        return subprocess.CompletedProcess(cmd, returncode, stdout, stderr)
+        return result
         
     except Exception as e:
         log_memory_state(f"ERROR-{process_name}")
@@ -110,7 +99,7 @@ def convert_jpeg_to_avif(jpeg_data: bytes, original_filename: str = "image.jpg")
         log_memory_state("POST-JPEG-GC")
 
         try:
-            result = monitor_subprocess_memory("avifenc", [
+            result = run_with_memory_monitoring("avifenc", [
                 "avifenc", "--speed", "6", "--jobs", "1",
                 str(input_path), str(output_path)
             ], capture_output=True, text=True, check=True)
@@ -155,7 +144,7 @@ def convert_heic_to_avif_cli(heic_data: bytes, original_filename: str = "image.h
 
         try:
             # ImageMagick conversion
-            result = monitor_subprocess_memory("ImageMagick", [
+            result = run_with_memory_monitoring("ImageMagick", [
                 "convert", str(heic_path), str(jpeg_path)
             ], capture_output=True, check=True)
             
