@@ -116,12 +116,9 @@ async def convert_image(image: UploadFile = File(...)):
             "conversionTimeSec": round(end_time - start_time, 2)
         },
         "data": {
-            "fullSize": {
                 "filename": image.filename,
                 "content": base64_content,
                 "size": len(avif_data),
-                "mimetype": "image/avif",
-                "variant": "full"
-            }
+                "mimetype": "image/avif"
         }
     }
