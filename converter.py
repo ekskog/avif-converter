@@ -7,7 +7,6 @@ import gc
 import logging
 import traceback
 import resource
-from typing import Optional
 
 def get_memory_usage():
     """Returns current memory usage in MB"""
