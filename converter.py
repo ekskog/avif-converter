@@ -174,7 +174,7 @@ def convert_heic_to_avif_cli(heic_data: bytes, original_filename: str = "image.h
 
         try:
             # AVIF conversion
-            result = monitor_subprocess_memory("avifenc", [
+            result = run_with_memory_monitoring("avifenc", [
                 "avifenc", "--speed", "6", "--jobs", "1",
                 str(jpeg_path), str(avif_path)
             ], capture_output=True, text=True, check=True)
